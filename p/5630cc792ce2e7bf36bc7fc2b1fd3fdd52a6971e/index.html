@@ -122,13 +122,17 @@ const stdTex = texLoader.load(DATA.stdTexture); stdTex.colorSpace = THREE.SRGBCo
 const mat = new THREE.MeshPhongMaterial({map:photoTex,side:THREE.DoubleSide,shininess:4});
 const terrain = buildTerrain();
 scene.add(terrain);
-const pointGroup = new THREE.Group(), labelGroup = new THREE.Group(), gridGroup = new THREE.Group(), chikuGroup = new THREE.Group(), chikuLblGroup = new THREE.Group();
+const POINT_LIFT_M = 0.2;
+const LABEL_LIFT_M = 8.0;
+const pointGroup = new THREE.Group(), labelGroup = new THREE.Group(), leaderGroup = new THREE.Group(), gridGroup = new THREE.Group(), chikuGroup = new THREE.Group(), chikuLblGroup = new THREE.Group();
 chikuLblGroup.visible=false;
+leaderGroup.renderOrder=18;
 chikuGroup.renderOrder=20;
 chikuLblGroup.renderOrder=21;
+labelGroup.renderOrder=22;
 let currentView='south';
 let currentAlt='top';
-scene.add(pointGroup,labelGroup,gridGroup,chikuGroup,chikuLblGroup);
+scene.add(pointGroup,labelGroup,leaderGroup,gridGroup,chikuGroup,chikuLblGroup);
 buildPoints();
 buildGrid();
 buildChiku();
@@ -170,8 +174,15 @@ function refreshTerrainZ(){
   let i=0;
   for(let y=0;y<n;y++)for(let x=0;x<n;x++)pos.setY(i++, zScaled(DATA.elev[y][x]));
   pos.needsUpdate=true; terrain.geometry.computeVertexNormals();
-  pointGroup.children.forEach(o=>{o.position.y=zScaled(o.userData.z)+0.2});
-  labelGroup.children.forEach(o=>{o.position.y=zScaled(o.userData.z)+0.8});
+  pointGroup.children.forEach(o=>{o.position.y=zScaled(o.userData.z)+POINT_LIFT_M});
+  labelGroup.children.forEach(o=>{o.position.y=zScaled(o.userData.z)+LABEL_LIFT_M});
+  leaderGroup.children.forEach(o=>{
+    const p=o.userData, pos=o.geometry.attributes.position;
+    const base=zScaled(p.z);
+    pos.setXYZ(0,p.sceneX,base+POINT_LIFT_M+0.45,-p.sceneNorth);
+    pos.setXYZ(1,p.sceneX,base+LABEL_LIFT_M,-p.sceneNorth);
+    pos.needsUpdate=true;
+  });
   buildChiku(); buildChikuLabels();
 }
 function makeLabel(text,color){
@@ -182,16 +193,25 @@ function makeLabel(text,color){
   ctx.fillStyle='#fff'; ctx.fillText(text.slice(0,16),12,39);
   const tex=new THREE.CanvasTexture(canvas); tex.colorSpace=THREE.SRGBColorSpace;
   const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthTest:false}));
+  sp.center.set(0.5,0.0);
   sp.scale.set(4.2,1,1); return sp;
 }
 function buildPoints(){
   DATA.points.forEach(p=>{
     const color=new THREE.Color(p.color);
     const marker=new THREE.Mesh(new THREE.SphereGeometry(0.45,12,8),new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:.25}));
-    marker.position.set(p.sceneX,zScaled(p.z)+0.2,-p.sceneNorth);
+    const base=zScaled(p.z);
+    marker.position.set(p.sceneX,base+POINT_LIFT_M,-p.sceneNorth);
     marker.userData=p; pointGroup.add(marker);
+    const leaderGeom=new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(p.sceneX,base+POINT_LIFT_M+0.45,-p.sceneNorth),
+      new THREE.Vector3(p.sceneX,base+LABEL_LIFT_M,-p.sceneNorth)
+    ]);
+    const leader=new THREE.Line(leaderGeom,new THREE.LineBasicMaterial({color,transparent:true,opacity:.92,depthTest:false,depthWrite:false}));
+    leader.renderOrder=18;
+    leader.userData=p; leaderGroup.add(leader);
     const label=makeLabel(p.name,p.color);
-    label.position.set(p.sceneX,zScaled(p.z)+0.8,-p.sceneNorth);
+    label.position.set(p.sceneX,base+LABEL_LIFT_M,-p.sceneNorth);
     label.userData=p; labelGroup.add(label);
   });
 }
@@ -272,6 +292,7 @@ function applyVisibility(){
   const showL=document.getElementById('showLabels').checked;
   pointGroup.children.forEach(o=>{const e=document.getElementById('kind_'+o.userData.kind);o.visible=showP && (!e || e.checked);});
   labelGroup.children.forEach(o=>{const e=document.getElementById('kind_'+o.userData.kind);o.visible=showL && (!e || e.checked);});
+  leaderGroup.children.forEach(o=>{const e=document.getElementById('kind_'+o.userData.kind);o.visible=showL && (!e || e.checked);});
   terrain.visible=document.getElementById('showTerrain').checked;
   gridGroup.visible=document.getElementById('showGrid').checked;
   chikuGroup.visible=document.getElementById('showChiku').checked;
