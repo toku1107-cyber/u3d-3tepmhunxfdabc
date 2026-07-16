@@ -1449,6 +1449,14 @@ function setGroundMaterialOpacity(material,opacity){
   material.depthWrite=opacity>=0.999;
   material.needsUpdate=true;
 }
+function setGsiMaterialOpacity(material,opacity){
+  if(!material)return;
+  material.opacity=opacity;
+  material.transparent=opacity<0.999;
+  // 地理院面を深度へ書き込まず、地中の円形ソリッドを隠さない。
+  material.depthWrite=false;
+  material.needsUpdate=true;
+}
 window.applyGroundOpacity=function(){
   const el=document.getElementById('groundOpacity');
   const pct=el?Math.max(5,Math.min(100,parseFloat(el.value)||73)):73;
@@ -1462,9 +1470,9 @@ window.applyGsiOpacity=function(){
   const el=document.getElementById('gsiOpacity');
   const pct=el?Math.max(5,Math.min(100,parseFloat(el.value)||57)):57;
   const opacity=pct/100;
-  if(typeof gsiMesh!=='undefined'&&gsiMesh&&gsiMesh.material)setGroundMaterialOpacity(gsiMesh.material,opacity);
+  if(typeof gsiMesh!=='undefined'&&gsiMesh&&gsiMesh.material)setGsiMaterialOpacity(gsiMesh.material,opacity);
   if(typeof gsiHillMesh!=='undefined'&&gsiHillMesh&&gsiHillMesh.material){
-    setGroundMaterialOpacity(gsiHillMesh.material,0.5*opacity);
+    setGsiMaterialOpacity(gsiHillMesh.material,0.5*opacity);
   }
   const value=document.getElementById('gsiOpacityV');
   if(value)value.textContent=Math.round(pct)+'%';
