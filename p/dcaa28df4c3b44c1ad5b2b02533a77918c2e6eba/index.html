@@ -176,6 +176,7 @@ canvas{display:block;position:relative;z-index:0}
   <label style="display:block;font-size:11px;cursor:pointer;margin:2px 0"><input type="checkbox" id="showCorridor" checked onchange="toggleCorridor(this.checked)"> 円形ソリッド（200 / 600mm）</label>
   <label style="display:block;font-size:11px;cursor:pointer;margin:2px 0;padding-left:16px"><input type="checkbox" id="showRouteName" checked onchange="toggleRouteName(this.checked)"> 路線名</label>
   <label style="display:block;font-size:11px;cursor:pointer;margin:2px 0;padding-left:16px"><input type="checkbox" id="showValves" checked onchange="toggleValves(this.checked)"> 弁類（空気・制水・排泥）</label>
+  <label style="display:block;font-size:11px;cursor:pointer;margin:2px 0;padding-left:16px"><input type="checkbox" id="showFlowDirection" checked onchange="toggleFlowDirection(this.checked)"> 流水方向（No.0 → 終点）</label>
   <label style="display:block;font-size:11px;cursor:pointer;margin:2px 0;padding-left:16px"><input type="checkbox" id="showRouteLbl" onchange="toggleRouteLbl(this.checked)"> 主要測点名</label>
 
   <div class="st">
@@ -356,7 +357,7 @@ canvas{display:block;position:relative;z-index:0}
 
 
 <h3>指定8路線の計画センター</h3>
-<p>計画センターXYZ整理成果から、既存6路線と第1号幹線用水路B・D工区の計8路線（325点、317線分）を表示します。路線名は表示中の路線部分から画面中央に近い位置を選び、画面内に収まる引出線付きラベルとして追従します。</p>
+<p>計画センターXYZ整理成果から、既存6路線と第1号幹線用水路B・D工区の計8路線（325点、317線分）を表示します。路線名は表示中の路線部分から画面中央に近い位置を選び、画面内に収まる引出線付きラベルとして追従します。シアンの矢印は画面内に見える線分上へ配置され、No.0から終点へ向かう流水方向を示します。</p>
 <table>
 <tr><th>路線名</th><th>点数</th><th>延長(m)</th><th>起終点</th><th>Z範囲(m)</th><th>直径(mm)</th></tr>
 <tr><td><b>CB-6-4</b></td><td style="text-align:right">7</td><td style="text-align:right">90.200</td><td>NO.0 → NO.2+10.20</td><td style="text-align:right">171.372～173.416</td><td style="text-align:right">200</td></tr>
@@ -1722,16 +1723,26 @@ const ROUTE_LABEL_FONT_PX=10;
 const ROUTE_LABEL_HEIGHT=17;
 const VALVE_LABEL_FONT_PX=9;
 const VALVE_LABEL_HEIGHT=15;
-const ROUTE_VERTICAL_GAP=12;
-const VALVE_VERTICAL_GAP=9;
+const LABEL_LEADER_HEIGHT_MULTIPLIER=6;
+const ROUTE_VERTICAL_GAP=12*LABEL_LEADER_HEIGHT_MULTIPLIER;
+const VALVE_VERTICAL_GAP=9*LABEL_LEADER_HEIGHT_MULTIPLIER;
+const FLOW_ARROW_COLOR='#20e3ed';
+const FLOW_ARROW_WIDTH=34;
+const FLOW_ARROW_HEIGHT=16;
+const FLOW_ARROW_MARGIN=20;
+const FLOW_ARROW_POSITION_RATIOS=[.5,.25,.75,.125,.875,.375,.625];
+const FLOW_ARROW_NORMAL_OFFSETS=[0,18,-18,34,-34];
 const valveTypeColors={'空気弁':'#4dd0e1','制水弁':'#ffd54f','排泥弁':'#ff8a65'};
-let routeNameVisible=true,valveVisible=true,annotationDirty=true,lastAnnotationKey='';
-let annotationState={bounds:null,routeLabels:[],valveLabels:[]};
+let routeNameVisible=true,valveVisible=true,flowDirectionVisible=true,annotationDirty=true,lastAnnotationKey='';
+let annotationState={bounds:null,routeLabels:[],valveLabels:[],flowArrows:[]};
 const annotationMeasure=document.createElement('canvas').getContext('2d');
+const flowDirectionLayer=document.createElementNS(SVG_NS,'g');
 const valveAnnotationLayer=document.createElementNS(SVG_NS,'g');
 const routeAnnotationLayer=document.createElementNS(SVG_NS,'g');
+flowDirectionLayer.setAttribute('id','flowDirectionLayer');
 valveAnnotationLayer.setAttribute('id','valveAnnotationLayer');
 routeAnnotationLayer.setAttribute('id','routeAnnotationLayer');
+annotationSvg.appendChild(flowDirectionLayer);
 annotationSvg.appendChild(valveAnnotationLayer);
 annotationSvg.appendChild(routeAnnotationLayer);
 
@@ -1900,6 +1911,95 @@ function findRouteAnchorCandidates(route,bounds,obstacles,surfaceRings){
   });
   return candidates.sort((a,b)=>a.score-b.score).slice(0,24);
 }
+function routeChainageAtSample(route,sample){
+  const segment=Math.max(0,Math.min(route.points.length-2,sample.segment));
+  const t=Math.max(0,Math.min(1,sample.t));
+  const left=route.points[segment],right=route.points[segment+1];
+  return left.c+(right.c-left.c)*t;
+}
+function clipScreenSegmentToBounds(start,end,bounds,pad=0){
+  const xmin=bounds.left+pad,xmax=bounds.right-pad;
+  const ymin=bounds.top+pad,ymax=bounds.bottom-pad;
+  if(xmin>=xmax||ymin>=ymax)return null;
+  const dx=end.x-start.x,dy=end.y-start.y;
+  let t0=0,t1=1;
+  const edges=[[-dx,start.x-xmin],[dx,xmax-start.x],[-dy,start.y-ymin],[dy,ymax-start.y]];
+  for(const [p,q] of edges){
+    if(Math.abs(p)<1e-9){if(q<0)return null;continue;}
+    const t=q/p;
+    if(p<0){if(t>t1)return null;t0=Math.max(t0,t);}
+    else{if(t<t0)return null;t1=Math.min(t1,t);}
+  }
+  return t1-t0>1e-9?{t0,t1}:null;
+}
+function flowArrowBox(x,y,angle){
+  const radians=angle*Math.PI/180;
+  const width=Math.abs(Math.cos(radians))*FLOW_ARROW_WIDTH+Math.abs(Math.sin(radians))*FLOW_ARROW_HEIGHT+4;
+  const height=Math.abs(Math.sin(radians))*FLOW_ARROW_WIDTH+Math.abs(Math.cos(radians))*FLOW_ARROW_HEIGHT+4;
+  return {x:x-width/2,y:y-height/2,w:width,h:height};
+}
+function findFlowArrowCandidates(route,bounds,obstacles,surfaceRings){
+  const cx=(bounds.left+bounds.right)/2,cy=(bounds.top+bounds.bottom)/2;
+  const candidates=[];
+  for(let segment=0;segment<surfaceRings.length-1;segment++){
+    const start=projectSurfacePoint(surfaceRings[segment]);
+    const end=projectSurfacePoint(surfaceRings[segment+1]);
+    if(!start||!end)continue;
+    const clipped=clipScreenSegmentToBounds(start,end,bounds,FLOW_ARROW_MARGIN);
+    if(!clipped)continue;
+    const dx=end.x-start.x,dy=end.y-start.y;
+    const length=Math.hypot(dx,dy);
+    if(!Number.isFinite(length)||length<0.05)continue;
+    const angle=Math.atan2(dy,dx)*180/Math.PI;
+    const radians=angle*Math.PI/180;
+    for(const ratio of FLOW_ARROW_POSITION_RATIOS){
+      const t=clipped.t0+(clipped.t1-clipped.t0)*ratio;
+      const anchor={x:start.x+dx*t,y:start.y+dy*t};
+      for(const offset of FLOW_ARROW_NORMAL_OFFSETS){
+        const current={
+          x:anchor.x-Math.sin(radians)*offset,y:anchor.y+Math.cos(radians)*offset,
+          depth:start.depth+(end.depth-start.depth)*t,
+          sample:{segment,t},chainage:routeChainageAtSample(route,{segment,t}),anchor,offset
+        };
+        const box=flowArrowBox(current.x,current.y,angle);
+        if(box.x<bounds.left+2||box.y<bounds.top+2||box.x+box.w>bounds.right-2||box.y+box.h>bounds.bottom-2)continue;
+        if(obstacles.some(item=>overlapArea(box,item,2)>0))continue;
+        const score=(current.x-cx)**2+(current.y-cy)**2+offset*offset*6;
+        candidates.push({...current,angle,box,score});
+      }
+    }
+  }
+  return candidates.sort((a,b)=>a.score-b.score||a.chainage-b.chainage);
+}
+function pickFlowArrowCandidate(candidates,occupied){
+  return candidates.find(candidate=>occupied.every(item=>overlapArea(candidate.box,item,2)===0))||null;
+}
+function appendFlowArrow(route,candidate){
+  const group=document.createElementNS(SVG_NS,'g');
+  group.dataset.kind='flow-direction';
+  group.dataset.route=route.name;
+  group.dataset.direction='no0-to-end';
+  group.dataset.stationOrder='ascending-chainage';
+  group.dataset.screenSpace='fixed-size';
+  group.dataset.offsetPx=candidate.offset.toFixed(1);
+  group.setAttribute('role','img');
+  group.setAttribute('aria-label',`${route.name} 流水方向 No.0から終点`);
+  group.setAttribute('transform',`translate(${candidate.x.toFixed(2)} ${candidate.y.toFixed(2)}) rotate(${candidate.angle.toFixed(2)})`);
+  const title=document.createElementNS(SVG_NS,'title');
+  title.textContent=`${route.name} 流水方向: No.0 → 終点`;
+  const connector=Math.abs(candidate.offset)>0.1?setSvgAttrs(document.createElementNS(SVG_NS,'line'),{
+    x1:0,y1:-Math.sign(candidate.offset)*(FLOW_ARROW_HEIGHT/2+1),x2:0,y2:-candidate.offset,
+    stroke:FLOW_ARROW_COLOR,'stroke-width':1.2,'stroke-linecap':'round','vector-effect':'non-scaling-stroke'
+  }):null;
+  const arrow=setSvgAttrs(document.createElementNS(SVG_NS,'path'),{
+    d:'M -17 -3 L 5 -3 L 5 -7.5 L 17 0 L 5 7.5 L 5 3 L -17 3 Z',
+    fill:FLOW_ARROW_COLOR,stroke:'#062b31','stroke-width':1.15,
+    'stroke-linejoin':'round','vector-effect':'non-scaling-stroke'
+  });
+  arrow.style.filter='drop-shadow(0 1px 1px rgba(0,0,0,.9))';
+  group.append(title);if(connector)group.append(connector);group.append(arrow);flowDirectionLayer.appendChild(group);
+}
+function clearFlowArrows(){flowDirectionLayer.replaceChildren();}
 function measureLabel(text,fontPx,height,maxWidth){
   annotationMeasure.font=`600 ${fontPx}px "Segoe UI","Yu Gothic UI",sans-serif`;
   return {w:Math.min(maxWidth,Math.ceil(annotationMeasure.measureText(text).width)+10),h:height};
@@ -1942,6 +2042,7 @@ function chooseVerticalLabelBox(anchor,size,bounds,occupied,kind,index){
 }
 function setAnnotationPosition(node,anchor,box){
   const edgeY=box.y+box.h;
+  const leaderHeight=anchor.y-edgeY;
   setSvgAttrs(node.line,{x1:anchor.x,y1:anchor.y,x2:anchor.x,y2:edgeY});
   setSvgAttrs(node.markerHalo,{cx:anchor.x,cy:anchor.y});
   setSvgAttrs(node.marker,{cx:anchor.x,cy:anchor.y});
@@ -1952,6 +2053,7 @@ function setAnnotationPosition(node,anchor,box){
   node.group.dataset.anchorTarget='solid-surface';
   node.group.dataset.surfaceMode='mesh-top-ring-edge';
   node.group.dataset.markerStyle='hollow-ring';
+  node.group.dataset.leaderHeightPx=leaderHeight.toFixed(1);
   node.group.dataset.box=`${box.x.toFixed(1)},${box.y.toFixed(1)},${box.w.toFixed(1)},${box.h.toFixed(1)}`;
   node.group.style.opacity=box.penalty>0?'.84':'1';
 }
@@ -1961,7 +2063,7 @@ function hideAnnotationNodes(nodes){
   });
 }
 function cameraAnnotationKey(zS,bounds,obstacles){
-  const values=[innerWidth,innerHeight,zS,routeNameVisible?1:0,valveVisible?1:0,
+  const values=[innerWidth,innerHeight,zS,routeNameVisible?1:0,valveVisible?1:0,flowDirectionVisible?1:0,
     ...cam.position.toArray(),...cam.quaternion.toArray(),...cam.up.toArray(),...ctl.target.toArray(),
     bounds.left,bounds.top,bounds.right,bounds.bottom,
     ...obstacles.flatMap(item=>[item.id,item.x,item.y,item.w,item.h])];
@@ -1976,18 +2078,19 @@ window.updateRouteAnnotations=function(force=false){
   if(!force&&!annotationDirty&&key===lastAnnotationKey)return;
   annotationDirty=false;lastAnnotationKey=key;
   hideAnnotationNodes(routeAnnotationNodes);hideAnnotationNodes(valveAnnotationNodes);
+  clearFlowArrows();
   const occupied=obstacles.map(({x,y,w,h})=>({x,y,w,h}));
   const surfaceRingsByRoute=new Map(routeDefs.map(route=>[route.name,buildRouteTopSurfaceRings(route,zS)]));
   const nextState={
     bounds:{...bounds},
     obstacles:obstacles.map(item=>({...item})),
-    routeLabels:[],valveLabels:[]
+    routeLabels:[],valveLabels:[],flowArrows:[]
   };
 
   if(routeNameVisible){
     const routeItems=routeDefs.map(route=>({
       route,
-      anchors:findRouteAnchorCandidates(route,bounds,obstacles,surfaceRingsByRoute.get(route.name))
+      anchors:findRouteAnchorCandidates(route,bounds,occupied,surfaceRingsByRoute.get(route.name))
     }))
       .filter(item=>item.anchors.length)
       .sort((a,b)=>a.anchors[0].y-b.anchors[0].y||a.anchors[0].x-b.anchors[0].x);
@@ -2004,7 +2107,7 @@ window.updateRouteAnnotations=function(force=false){
       occupied.push(box);setAnnotationPosition(node,anchor,box);
       nextState.routeLabels.push({
         route:item.route.name,anchor:{...anchor},box:{x:box.x,y:box.y,w:box.w,h:box.h},
-        leader:{x1:anchor.x,y1:anchor.y,x2:anchor.x,y2:box.y+box.h},
+        leader:{x1:anchor.x,y1:anchor.y,x2:anchor.x,y2:box.y+box.h,heightPx:anchor.y-(box.y+box.h)},
         anchorTarget:'solid-surface',surfaceMode:'mesh-top-ring-edge',leaderDirection:'screen-vertical-up'
       });
     });
@@ -2016,7 +2119,7 @@ window.updateRouteAnnotations=function(force=false){
       const world=interpolateRouteTopSurface(surfaceRingsByRoute.get(route.name),valve._surfaceSample);
       const projected=world?projectSurfacePoint(world):null;
       const anchor=projected?{...projected,surfaceSample:{...valve._surfaceSample}}:null;
-      if(isPointInBounds(anchor,bounds,2)&&!isPointInObstacles(anchor,obstacles,2)){
+      if(isPointInBounds(anchor,bounds,2)&&!isPointInObstacles(anchor,occupied,2)){
         valveItems.push({route,valve,anchor});
       }
     }));
@@ -2030,8 +2133,31 @@ window.updateRouteAnnotations=function(force=false){
       nextState.valveLabels.push({
         id:item.valve.id,route:item.route.name,type:item.valve.type,station:item.valve.station,
         anchor:{...item.anchor},box:{x:box.x,y:box.y,w:box.w,h:box.h},
-        leader:{x1:item.anchor.x,y1:item.anchor.y,x2:item.anchor.x,y2:box.y+box.h},
+        leader:{x1:item.anchor.x,y1:item.anchor.y,x2:item.anchor.x,y2:box.y+box.h,heightPx:item.anchor.y-(box.y+box.h)},
         anchorTarget:'solid-surface',surfaceMode:'mesh-top-ring-edge',leaderDirection:'screen-vertical-up'
+      });
+    });
+  }
+
+  // 既存の路線名・弁類を先に確保し、流水矢印は残る空きへ退避配置する。
+  if(flowDirectionVisible){
+    const arrowPlans=routeDefs.map(route=>({
+      route,
+      candidates:findFlowArrowCandidates(route,bounds,obstacles,surfaceRingsByRoute.get(route.name))
+    }))
+      .filter(plan=>plan.candidates.length)
+      .sort((a,b)=>a.candidates.length-b.candidates.length||a.route.name.localeCompare(b.route.name));
+    arrowPlans.forEach(({route,candidates})=>{
+      const candidate=pickFlowArrowCandidate(candidates,occupied);
+      if(!candidate)return;
+      appendFlowArrow(route,candidate);
+      occupied.push({...candidate.box,id:`flow:${route.name}`});
+      nextState.flowArrows.push({
+        route:route.name,x:candidate.x,y:candidate.y,angle:candidate.angle,
+        chainage:candidate.chainage,direction:'no0-to-end',stationOrder:'ascending-chainage',
+        screenSpace:'fixed-size',placement:'visible-segment-clipping',collisionAvoidance:true,
+        width:FLOW_ARROW_WIDTH,height:FLOW_ARROW_HEIGHT,offsetPx:candidate.offset,
+        anchor:{...candidate.anchor},box:{...candidate.box}
       });
     });
   }
@@ -2039,10 +2165,19 @@ window.updateRouteAnnotations=function(force=false){
 };
 window.__annotationDebug={
   routeLabelScale:0.5,routeLabelFontPx:ROUTE_LABEL_FONT_PX,valveLabelFontPx:VALVE_LABEL_FONT_PX,
+  leaderHeightMultiplier:LABEL_LEADER_HEIGHT_MULTIPLIER,
+  minimumLeaderHeightPx:{route:ROUTE_VERTICAL_GAP,valve:VALVE_VERTICAL_GAP},
   anchorTarget:'solid-surface',surfaceMode:'mesh-top-ring-edge',leaderDirection:'screen-vertical-up',
   solidSurfaceEpsilon:0,radialSegments:SOLID_RADIAL_SEGMENTS,
   routeCount:routeDefs.length,valveCount:routeDefs.reduce((sum,route)=>sum+route.valves.length,0),
   getState:()=>JSON.parse(JSON.stringify(annotationState))
+};
+window.__flowDirectionDebug={
+  visible:()=>flowDirectionVisible,
+  routeCount:routeDefs.length,direction:'no0-to-end',stationOrder:'ascending-chainage',
+  screenSpace:'fixed-size',placement:'visible-segment-clipping',collisionAvoidance:true,
+  color:FLOW_ARROW_COLOR,width:FLOW_ARROW_WIDTH,height:FLOW_ARROW_HEIGHT,
+  getState:()=>JSON.parse(JSON.stringify(annotationState.flowArrows))
 };
 
 buildRoute(1);buildCorridor(1);buildRouteLabels(1);
@@ -2051,6 +2186,7 @@ window.toggleCorridor=function(value){corridorGroup.visible=Boolean(value)};
 window.toggleRouteLbl=function(value){routeLblGroup.visible=Boolean(value)};
 window.toggleRouteName=function(value){routeNameVisible=Boolean(value);annotationDirty=true;window.updateRouteAnnotations(true)};
 window.toggleValves=function(value){valveVisible=Boolean(value);annotationDirty=true;window.updateRouteAnnotations(true)};
+window.toggleFlowDirection=function(value){flowDirectionVisible=Boolean(value);annotationDirty=true;window.updateRouteAnnotations(true)};
 window.updateRouteZ=function(zS){buildRoute(zS);buildCorridor(zS);buildRouteLabels(zS);annotationDirty=true};
 
 
@@ -2279,9 +2415,10 @@ function loadDef(){try{const d=JSON.parse(localStorage.getItem(SK));if(!d)return
   if(d.showCorridor!=null){const ce=document.getElementById('showCorridor');if(ce){ce.checked=d.showCorridor;toggleCorridor(d.showCorridor)}}
   if(d.showRouteName!=null){const rn=document.getElementById('showRouteName');if(rn){rn.checked=d.showRouteName;toggleRouteName(d.showRouteName)}}
   if(d.showValves!=null){const ve=document.getElementById('showValves');if(ve){ve.checked=d.showValves;toggleValves(d.showValves)}}
+  if(d.showFlowDirection!=null){const fd=document.getElementById('showFlowDirection');if(fd){fd.checked=d.showFlowDirection;toggleFlowDirection(d.showFlowDirection)}}
   if(d.showRouteLbl!=null){const rl=document.getElementById('showRouteLbl');if(rl){rl.checked=d.showRouteLbl;toggleRouteLbl(d.showRouteLbl)}}
   if(d.bg)setBg(d.bg);
-  ['showTerrain','showOvl','wf','fs','showGcp','showChiku','showChikuLbl','showRoute','showCorridor','showRouteName','showValves','showRouteLbl','showGsi','showHill','gsiCutout'].forEach(k=>{
+  ['showTerrain','showOvl','wf','fs','showGcp','showChiku','showChikuLbl','showRoute','showCorridor','showRouteName','showValves','showFlowDirection','showRouteLbl','showGsi','showHill','gsiCutout'].forEach(k=>{
     const el=document.getElementById(k);if(el&&d[k]!=null){el.checked=d[k];if(el.onchange)el.onchange({target:el});else{const ev=new Event('change');el.dispatchEvent(ev)}}
   });
   if(d.gsiType!=null){const gt=document.getElementById('gsiType');if(gt){gt.value=d.gsiType;if(window.switchGsiType)switchGsiType(d.gsiType)}}
@@ -2303,9 +2440,10 @@ window.saveDef=function(){try{const d={};
   {const ce=document.getElementById('showCorridor');if(ce)d.showCorridor=ce.checked;}
   {const rn=document.getElementById('showRouteName');if(rn)d.showRouteName=rn.checked;}
   {const ve=document.getElementById('showValves');if(ve)d.showValves=ve.checked;}
+  {const fd=document.getElementById('showFlowDirection');if(fd)d.showFlowDirection=fd.checked;}
   {const rl=document.getElementById('showRouteLbl');if(rl)d.showRouteLbl=rl.checked;}
   d.bg=curBg;
-  ['showTerrain','showOvl','wf','fs','showGcp','showChiku','showChikuLbl','showRoute','showCorridor','showRouteName','showValves','showRouteLbl','showGsi','showHill','gsiCutout'].forEach(k=>{
+  ['showTerrain','showOvl','wf','fs','showGcp','showChiku','showChikuLbl','showRoute','showCorridor','showRouteName','showValves','showFlowDirection','showRouteLbl','showGsi','showHill','gsiCutout'].forEach(k=>{
     const el=document.getElementById(k);if(el)d[k]=el.checked;
   });
   const gt=document.getElementById('gsiType');if(gt)d.gsiType=gt.value;
@@ -2322,6 +2460,7 @@ function syncLayerVisibilityFromControls(){
     ['showChiku',window.toggleChiku],['showChikuLbl',window.toggleChikuLbl],
     ['showRoute',window.toggleRoute],['showCorridor',window.toggleCorridor],
     ['showRouteName',window.toggleRouteName],['showValves',window.toggleValves],
+    ['showFlowDirection',window.toggleFlowDirection],
     ['showRouteLbl',window.toggleRouteLbl]
   ].forEach(([id,toggle])=>{
     const element=document.getElementById(id);if(element&&typeof toggle==='function')toggle(element.checked);
