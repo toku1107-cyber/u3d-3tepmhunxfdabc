@@ -58,10 +58,22 @@ canvas{display:block;position:relative;z-index:0}
 .ag button{flex:1;padding:4px 2px;font-size:9px;background:#21262d;color:#c9d1d9;
   border:1px solid #30363d;border-radius:4px;cursor:pointer}
 .ag button.act{background:#1f6f2f;color:#fff;border-color:#3fb950}
-#leg{position:absolute;right:280px;top:50%;transform:translateY(-50%);text-align:center}
+#leg{position:absolute;right:280px;top:50%;transform:translateY(-50%);display:flex;
+  align-items:center;gap:10px;text-align:left;min-width:214px}
 #leg .lb{font-size:9px;color:#8b949e;margin:2px 0}
+#elevationLegend{display:flex;flex-direction:column;align-items:center;flex:0 0 auto}
 #lbar{width:14px;height:140px;border-radius:3px;
   background:linear-gradient(to bottom,#f0e6c8,#d4a843,#7ab648,#3a8a2a,#1a4a14)}
+#directionLegend{display:flex;flex-direction:column;gap:7px;border-left:1px solid #30363d;padding-left:10px}
+.directionLegendRow{display:grid;grid-template-columns:34px 52px 64px;align-items:center;gap:5px;min-height:24px}
+.directionLegendRow>span{font-size:10px;white-space:nowrap}
+.directionLegendArrow{width:34px;height:16px;overflow:visible}
+.directionLegendToggle{display:grid;grid-template-columns:repeat(2,32px);gap:0}
+.directionLegendToggle button{height:24px;padding:0;font-size:9px;font-weight:700;cursor:pointer;
+  background:#21262d;color:#c9d1d9;border:1px solid #30363d}
+.directionLegendToggle button:first-child{border-radius:4px 0 0 4px}
+.directionLegendToggle button:last-child{border-radius:0 4px 4px 0;border-left:0}
+.directionLegendToggle button.act{background:#1f6f2f;color:#fff;border-color:#3fb950}
 #et{display:none;position:absolute;pointer-events:none;background:rgba(0,0,0,0.90);color:#79c0ff;
   padding:6px 10px;border-radius:5px;font-size:12px;font-family:monospace;
   border:1px solid #30363d;white-space:nowrap;z-index:100}
@@ -179,6 +191,7 @@ canvas{display:block;position:relative;z-index:0}
   <label style="display:block;font-size:11px;cursor:pointer;margin:2px 0;padding-left:16px"><input type="checkbox" id="showRouteName" checked onchange="toggleRouteName(this.checked)"> 路線名</label>
   <label style="display:block;font-size:11px;cursor:pointer;margin:2px 0;padding-left:16px"><input type="checkbox" id="showValves" checked onchange="toggleValves(this.checked)"> 弁類（空気・制水・排泥）</label>
   <label style="display:block;font-size:11px;cursor:pointer;margin:2px 0;padding-left:16px"><input type="checkbox" id="showFlowDirection" checked onchange="toggleFlowDirection(this.checked)"> 流水方向（No.0 → 終点）</label>
+  <label style="display:block;font-size:11px;cursor:pointer;margin:2px 0;padding-left:16px"><input type="checkbox" id="showDrainDirection" checked onchange="toggleDrainDirection(this.checked)"> 排泥方向（管中心高 高 → 低）</label>
   <label style="display:block;font-size:11px;cursor:pointer;margin:2px 0;padding-left:16px"><input type="checkbox" id="showRouteLbl" onchange="toggleRouteLbl(this.checked)"> 主要測点名</label>
 
   <div class="st">
@@ -265,9 +278,33 @@ canvas{display:block;position:relative;z-index:0}
 </div>
 
 <div id="leg" class="panel">
-  <div class="lb" id="lgMx">209.8</div>
-  <div id="lbar"></div>
-  <div class="lb" id="lgMn">156.3</div>
+  <div id="elevationLegend" aria-label="標高凡例">
+    <div class="lb" id="lgMx">209.8</div>
+    <div id="lbar"></div>
+    <div class="lb" id="lgMn">156.3</div>
+  </div>
+  <div id="directionLegend" aria-label="方向凡例">
+    <div class="directionLegendRow">
+      <svg class="directionLegendArrow" viewBox="-17 -8 34 16" aria-hidden="true">
+        <path d="M -17 -3 L 5 -3 L 5 -7.5 L 17 0 L 5 7.5 L 5 3 L -17 3 Z" fill="#20e3ed" stroke="#062b31" stroke-width="1.15" stroke-linejoin="round"/>
+      </svg>
+      <span>流水方向</span>
+      <span class="directionLegendToggle" role="group" aria-label="流水方向表示">
+        <button type="button" id="legendFlowOn" class="act" aria-pressed="true" onclick="setFlowDirectionVisible(true)" title="流水方向を表示">ON</button>
+        <button type="button" id="legendFlowOff" class="bd" aria-pressed="false" onclick="setFlowDirectionVisible(false)" title="流水方向を非表示">OFF</button>
+      </span>
+    </div>
+    <div class="directionLegendRow">
+      <svg class="directionLegendArrow" viewBox="-17 -8 34 16" aria-hidden="true">
+        <path d="M -17 -3 L 5 -3 L 5 -7.5 L 17 0 L 5 7.5 L 5 3 L -17 3 Z" fill="#111827" stroke="#ffffff" stroke-width="1.35" stroke-linejoin="round"/>
+      </svg>
+      <span>排泥方向</span>
+      <span class="directionLegendToggle" role="group" aria-label="排泥方向表示">
+        <button type="button" id="legendDrainOn" class="act" aria-pressed="true" onclick="setDrainDirectionVisible(true)" title="排泥方向を表示">ON</button>
+        <button type="button" id="legendDrainOff" class="bd" aria-pressed="false" onclick="setDrainDirectionVisible(false)" title="排泥方向を非表示">OFF</button>
+      </span>
+    </div>
+  </div>
 </div>
 <div id="et"></div><div id="em"></div><div id="opTip"></div><div id="jwZoomRect"></div>
 <svg id="annotationOverlay" aria-hidden="true"></svg>
@@ -362,7 +399,7 @@ canvas{display:block;position:relative;z-index:0}
 
 
 <h3>指定8路線の計画センター</h3>
-<p>計画センターXYZ整理成果から、既存6路線と第1号幹線用水路B・D工区の計8路線（325点、317線分）を表示します。路線名は表示中の路線部分から画面中央に近い位置を選び、画面内に収まる引出線付きラベルとして追従します。シアンの矢印は画面内に見える線分上へ配置され、No.0から終点へ向かう流水方向を示します。</p>
+<p>計画センターXYZ整理成果から、既存6路線と第1号幹線用水路B・D工区の計8路線（325点、317線分）を表示します。路線名は表示中の路線部分から画面中央に近い位置を選び、画面内に収まる引出線付きラベルとして追従します。シアンの矢印はNo.0から終点へ向かう流水方向、白縁の黒い矢印は各線分の管中心高が高い側から低い側へ向かう排泥方向を示します。方向矢印は画面内の管路に沿って配置し、引出線は描画しません。</p>
 <table>
 <tr><th>路線名</th><th>点数</th><th>延長(m)</th><th>起終点</th><th>Z範囲(m)</th><th>直径(mm)</th></tr>
 <tr><td><b>CB-6-4</b></td><td style="text-align:right">7</td><td style="text-align:right">90.200</td><td>NO.0 → NO.2+10.20</td><td style="text-align:right">171.372～173.416</td><td style="text-align:right">200</td></tr>
@@ -379,7 +416,7 @@ canvas{display:block;position:relative;z-index:0}
 <tr><td>水平座標系</td><td>JGD2011 / 平面直角座標系第II系（EPSG:6670）</td></tr>
 <tr><td>Z座標</td><td>縦断図の計画管中心高を採用</td></tr>
 <tr><td>断面</td><td>既存6路線は直径0.200m、第1号幹線用水路B・D工区は直径0.600m。いずれも24分割、両端キャップ付きソリッド</td></tr>
-<tr><td>ソリッド色</td><td>CB-6-4-1とCB-10-1は赤、その他6路線は青</td></tr>
+<tr><td>ソリッド色</td><td>CB-6-4-1とCB-10-1は赤、CB-6-4・CT-10・CB-10-1-1・CB-10-1-2は黒灰、第1号幹線用水路B・D工区は青</td></tr>
 <tr><td>弁類</td><td>設計図面で確認した空気弁22件、制水弁15件、排泥弁12件を計画センター上へ累加距離補間して表示</td></tr>
 <tr><td>背景範囲</td><td>3D地形本体は500m×500mを維持し、国土地理院ベースレイヤだけを全路線+周囲100mへ拡張</td></tr>
 <tr><td>注意</td><td>本座標は想定整理値です。測設・施工への使用時は原図と照合してください。</td></tr>
@@ -800,6 +837,8 @@ window.setBg=function(mode){
   document.getElementById('bgWht').style.setProperty('background',isDark?btnBg:'#1f6f2f','important');
   document.getElementById('bgWht').style.setProperty('color',isDark?btnTxt:'#fff','important');
   document.getElementById('bgWht').style.borderColor=isDark?btnBdr:'#3fb950';
+  const directionLegend=document.getElementById('directionLegend');if(directionLegend)directionLegend.style.borderColor=panelBdr;
+  if(window.syncDirectionLegend)window.syncDirectionLegend();
 };
 setBg('light');
 window.toggleMobileUi=function(){
@@ -1758,22 +1797,27 @@ const LABEL_LEADER_HEIGHT_MULTIPLIER=6;
 const ROUTE_VERTICAL_GAP=12*LABEL_LEADER_HEIGHT_MULTIPLIER;
 const VALVE_VERTICAL_GAP=9*LABEL_LEADER_HEIGHT_MULTIPLIER;
 const FLOW_ARROW_COLOR='#20e3ed';
+const DRAIN_ARROW_COLOR='#111827';
+const DRAIN_ARROW_OUTLINE='#ffffff';
 const FLOW_ARROW_WIDTH=34;
 const FLOW_ARROW_HEIGHT=16;
 const FLOW_ARROW_MARGIN=20;
 const FLOW_ARROW_POSITION_RATIOS=[.5,.25,.75,.125,.875,.375,.625];
 const FLOW_ARROW_NORMAL_OFFSETS=[0,18,-18,34,-34];
 const valveTypeColors={'空気弁':'#4dd0e1','制水弁':'#ffd54f','排泥弁':'#ff8a65'};
-let routeNameVisible=true,valveVisible=true,flowDirectionVisible=true,annotationDirty=true,lastAnnotationKey='';
-let annotationState={bounds:null,routeLabels:[],valveLabels:[],flowArrows:[]};
+let routeNameVisible=true,valveVisible=true,flowDirectionVisible=true,drainDirectionVisible=true,annotationDirty=true,lastAnnotationKey='';
+let annotationState={bounds:null,routeLabels:[],valveLabels:[],flowArrows:[],drainArrows:[]};
 const annotationMeasure=document.createElement('canvas').getContext('2d');
 const flowDirectionLayer=document.createElementNS(SVG_NS,'g');
+const drainDirectionLayer=document.createElementNS(SVG_NS,'g');
 const valveAnnotationLayer=document.createElementNS(SVG_NS,'g');
 const routeAnnotationLayer=document.createElementNS(SVG_NS,'g');
 flowDirectionLayer.setAttribute('id','flowDirectionLayer');
+drainDirectionLayer.setAttribute('id','drainDirectionLayer');
 valveAnnotationLayer.setAttribute('id','valveAnnotationLayer');
 routeAnnotationLayer.setAttribute('id','routeAnnotationLayer');
 annotationSvg.appendChild(flowDirectionLayer);
+annotationSvg.appendChild(drainDirectionLayer);
 annotationSvg.appendChild(valveAnnotationLayer);
 annotationSvg.appendChild(routeAnnotationLayer);
 
@@ -1963,16 +2007,19 @@ function clipScreenSegmentToBounds(start,end,bounds,pad=0){
   }
   return t1-t0>1e-9?{t0,t1}:null;
 }
-function flowArrowBox(x,y,angle){
+function directionArrowBox(x,y,angle){
   const radians=angle*Math.PI/180;
   const width=Math.abs(Math.cos(radians))*FLOW_ARROW_WIDTH+Math.abs(Math.sin(radians))*FLOW_ARROW_HEIGHT+4;
   const height=Math.abs(Math.sin(radians))*FLOW_ARROW_WIDTH+Math.abs(Math.cos(radians))*FLOW_ARROW_HEIGHT+4;
   return {x:x-width/2,y:y-height/2,w:width,h:height};
 }
-function findFlowArrowCandidates(route,bounds,obstacles,surfaceRings){
+function findDirectionArrowCandidates(route,bounds,obstacles,surfaceRings,directionMode){
   const cx=(bounds.left+bounds.right)/2,cy=(bounds.top+bounds.bottom)/2;
   const candidates=[];
   for(let segment=0;segment<surfaceRings.length-1;segment++){
+    const routeStart=route.points[segment],routeEnd=route.points[segment+1];
+    const deltaZ=routeEnd.z-routeStart.z;
+    if(directionMode==='drain'&&Math.abs(deltaZ)<1e-6)continue;
     const start=projectSurfacePoint(surfaceRings[segment]);
     const end=projectSurfacePoint(surfaceRings[segment+1]);
     if(!start||!end)continue;
@@ -1981,7 +2028,8 @@ function findFlowArrowCandidates(route,bounds,obstacles,surfaceRings){
     const dx=end.x-start.x,dy=end.y-start.y;
     const length=Math.hypot(dx,dy);
     if(!Number.isFinite(length)||length<0.05)continue;
-    const angle=Math.atan2(dy,dx)*180/Math.PI;
+    const followsStationOrder=directionMode==='flow'||deltaZ<0;
+    const angle=Math.atan2(dy,dx)*180/Math.PI+(followsStationOrder?0:180);
     const radians=angle*Math.PI/180;
     for(const ratio of FLOW_ARROW_POSITION_RATIOS){
       const t=clipped.t0+(clipped.t1-clipped.t0)*ratio;
@@ -1990,9 +2038,14 @@ function findFlowArrowCandidates(route,bounds,obstacles,surfaceRings){
         const current={
           x:anchor.x-Math.sin(radians)*offset,y:anchor.y+Math.cos(radians)*offset,
           depth:start.depth+(end.depth-start.depth)*t,
-          sample:{segment,t},chainage:routeChainageAtSample(route,{segment,t}),anchor,offset
+          sample:{segment,t},chainage:routeChainageAtSample(route,{segment,t}),anchor,offset,
+          directionMode,
+          fromZ:directionMode==='drain'?Math.max(routeStart.z,routeEnd.z):null,
+          toZ:directionMode==='drain'?Math.min(routeStart.z,routeEnd.z):null,
+          elevationDrop:directionMode==='drain'?Math.abs(deltaZ):null,
+          followsStationOrder
         };
-        const box=flowArrowBox(current.x,current.y,angle);
+        const box=directionArrowBox(current.x,current.y,angle);
         if(box.x<bounds.left+2||box.y<bounds.top+2||box.x+box.w>bounds.right-2||box.y+box.h>bounds.bottom-2)continue;
         if(obstacles.some(item=>overlapArea(box,item,2)>0))continue;
         const score=(current.x-cx)**2+(current.y-cy)**2+offset*offset*6;
@@ -2002,35 +2055,63 @@ function findFlowArrowCandidates(route,bounds,obstacles,surfaceRings){
   }
   return candidates.sort((a,b)=>a.score-b.score||a.chainage-b.chainage);
 }
-function pickFlowArrowCandidate(candidates,occupied){
-  return candidates.find(candidate=>occupied.every(item=>overlapArea(candidate.box,item,2)===0))||null;
+function findFlowArrowCandidates(route,bounds,obstacles,surfaceRings){
+  return findDirectionArrowCandidates(route,bounds,obstacles,surfaceRings,'flow');
 }
-function appendFlowArrow(route,candidate){
+function findDrainArrowCandidates(route,bounds,obstacles,surfaceRings){
+  return findDirectionArrowCandidates(route,bounds,obstacles,surfaceRings,'drain');
+}
+function isDirectionArrowCandidateFree(candidate,occupied){
+  return occupied.every(item=>overlapArea(candidate.box,item,2)===0);
+}
+function pickDirectionArrowCandidate(candidates,occupied){
+  return candidates.find(candidate=>isDirectionArrowCandidateFree(candidate,occupied))||null;
+}
+function pickDirectionArrowPair(flowCandidates,drainCandidates,occupied){
+  const freeFlow=flowCandidates.filter(candidate=>isDirectionArrowCandidateFree(candidate,occupied)).slice(0,96);
+  const freeDrain=drainCandidates.filter(candidate=>isDirectionArrowCandidateFree(candidate,occupied)).slice(0,96);
+  for(const flow of freeFlow){
+    const drain=freeDrain.find(candidate=>overlapArea(flow.box,candidate.box,2)===0);
+    if(drain)return {flow,drain};
+  }
+  return null;
+}
+function appendDirectionArrow(route,candidate,options){
   const group=document.createElementNS(SVG_NS,'g');
-  group.dataset.kind='flow-direction';
+  group.dataset.kind=options.kind;
   group.dataset.route=route.name;
-  group.dataset.direction='no0-to-end';
-  group.dataset.stationOrder='ascending-chainage';
+  group.dataset.direction=options.direction;
+  group.dataset.stationOrder=candidate.followsStationOrder?'ascending-chainage':'descending-chainage';
   group.dataset.screenSpace='fixed-size';
   group.dataset.offsetPx=candidate.offset.toFixed(1);
+  group.dataset.leader='none';
   group.setAttribute('role','img');
-  group.setAttribute('aria-label',`${route.name} 流水方向 No.0から終点`);
+  group.setAttribute('aria-label',options.ariaLabel);
   group.setAttribute('transform',`translate(${candidate.x.toFixed(2)} ${candidate.y.toFixed(2)}) rotate(${candidate.angle.toFixed(2)})`);
   const title=document.createElementNS(SVG_NS,'title');
-  title.textContent=`${route.name} 流水方向: No.0 → 終点`;
-  const connector=Math.abs(candidate.offset)>0.1?setSvgAttrs(document.createElementNS(SVG_NS,'line'),{
-    x1:0,y1:-Math.sign(candidate.offset)*(FLOW_ARROW_HEIGHT/2+1),x2:0,y2:-candidate.offset,
-    stroke:FLOW_ARROW_COLOR,'stroke-width':1.2,'stroke-linecap':'round','vector-effect':'non-scaling-stroke'
-  }):null;
+  title.textContent=options.title;
   const arrow=setSvgAttrs(document.createElementNS(SVG_NS,'path'),{
     d:'M -17 -3 L 5 -3 L 5 -7.5 L 17 0 L 5 7.5 L 5 3 L -17 3 Z',
-    fill:FLOW_ARROW_COLOR,stroke:'#062b31','stroke-width':1.15,
+    fill:options.color,stroke:options.outline,'stroke-width':options.strokeWidth,
     'stroke-linejoin':'round','vector-effect':'non-scaling-stroke'
   });
   arrow.style.filter='drop-shadow(0 1px 1px rgba(0,0,0,.9))';
-  group.append(title);if(connector)group.append(connector);group.append(arrow);flowDirectionLayer.appendChild(group);
+  group.append(title,arrow);options.layer.appendChild(group);
 }
-function clearFlowArrows(){flowDirectionLayer.replaceChildren();}
+function appendFlowArrow(route,candidate){
+  appendDirectionArrow(route,candidate,{
+    kind:'flow-direction',direction:'no0-to-end',color:FLOW_ARROW_COLOR,outline:'#062b31',strokeWidth:1.15,
+    ariaLabel:`${route.name} 流水方向 No.0から終点`,title:`${route.name} 流水方向: No.0 → 終点`,layer:flowDirectionLayer
+  });
+}
+function appendDrainArrow(route,candidate){
+  appendDirectionArrow(route,candidate,{
+    kind:'drain-direction',direction:'high-z-to-low-z',color:DRAIN_ARROW_COLOR,outline:DRAIN_ARROW_OUTLINE,strokeWidth:1.35,
+    ariaLabel:`${route.name} 排泥方向 管中心高の高い側から低い側`,
+    title:`${route.name} 排泥方向: ${candidate.fromZ.toFixed(3)}m → ${candidate.toZ.toFixed(3)}m`,layer:drainDirectionLayer
+  });
+}
+function clearDirectionArrows(){flowDirectionLayer.replaceChildren();drainDirectionLayer.replaceChildren();}
 function measureLabel(text,fontPx,height,maxWidth){
   annotationMeasure.font=`600 ${fontPx}px "Segoe UI","Yu Gothic UI",sans-serif`;
   return {w:Math.min(maxWidth,Math.ceil(annotationMeasure.measureText(text).width)+10),h:height};
@@ -2094,7 +2175,7 @@ function hideAnnotationNodes(nodes){
   });
 }
 function cameraAnnotationKey(zS,bounds,obstacles){
-  const values=[innerWidth,innerHeight,zS,routeNameVisible?1:0,valveVisible?1:0,flowDirectionVisible?1:0,
+  const values=[innerWidth,innerHeight,zS,routeNameVisible?1:0,valveVisible?1:0,flowDirectionVisible?1:0,drainDirectionVisible?1:0,
     ...cam.position.toArray(),...cam.quaternion.toArray(),...cam.up.toArray(),...ctl.target.toArray(),
     bounds.left,bounds.top,bounds.right,bounds.bottom,
     ...obstacles.flatMap(item=>[item.id,item.x,item.y,item.w,item.h])];
@@ -2109,13 +2190,13 @@ window.updateRouteAnnotations=function(force=false){
   if(!force&&!annotationDirty&&key===lastAnnotationKey)return;
   annotationDirty=false;lastAnnotationKey=key;
   hideAnnotationNodes(routeAnnotationNodes);hideAnnotationNodes(valveAnnotationNodes);
-  clearFlowArrows();
+  clearDirectionArrows();
   const occupied=obstacles.map(({x,y,w,h})=>({x,y,w,h}));
   const surfaceRingsByRoute=new Map(routeDefs.map(route=>[route.name,buildRouteTopSurfaceRings(route,zS)]));
   const nextState={
     bounds:{...bounds},
     obstacles:obstacles.map(item=>({...item})),
-    routeLabels:[],valveLabels:[],flowArrows:[]
+    routeLabels:[],valveLabels:[],flowArrows:[],drainArrows:[]
   };
 
   if(routeNameVisible){
@@ -2170,26 +2251,58 @@ window.updateRouteAnnotations=function(force=false){
     });
   }
 
-  // 既存の路線名・弁類を先に確保し、流水矢印は残る空きへ退避配置する。
-  if(flowDirectionVisible){
-    const arrowPlans=routeDefs.map(route=>({
+  // 路線名・弁類を先に確保し、各路線の流水・排泥を対で選んで片方だけが空き領域を使い切るのを防ぐ。
+  if(flowDirectionVisible||drainDirectionVisible){
+    const directionPlans=routeDefs.map(route=>({
       route,
-      candidates:findFlowArrowCandidates(route,bounds,obstacles,surfaceRingsByRoute.get(route.name))
+      flowCandidates:flowDirectionVisible
+        ?findFlowArrowCandidates(route,bounds,obstacles,surfaceRingsByRoute.get(route.name)):[],
+      drainCandidates:drainDirectionVisible
+        ?findDrainArrowCandidates(route,bounds,obstacles,surfaceRingsByRoute.get(route.name)):[]
     }))
-      .filter(plan=>plan.candidates.length)
-      .sort((a,b)=>a.candidates.length-b.candidates.length||a.route.name.localeCompare(b.route.name));
-    arrowPlans.forEach(({route,candidates})=>{
-      const candidate=pickFlowArrowCandidate(candidates,occupied);
-      if(!candidate)return;
-      appendFlowArrow(route,candidate);
-      occupied.push({...candidate.box,id:`flow:${route.name}`});
-      nextState.flowArrows.push({
-        route:route.name,x:candidate.x,y:candidate.y,angle:candidate.angle,
-        chainage:candidate.chainage,direction:'no0-to-end',stationOrder:'ascending-chainage',
-        screenSpace:'fixed-size',placement:'visible-segment-clipping',collisionAvoidance:true,
-        width:FLOW_ARROW_WIDTH,height:FLOW_ARROW_HEIGHT,offsetPx:candidate.offset,
-        anchor:{...candidate.anchor},box:{...candidate.box}
+      .filter(plan=>plan.flowCandidates.length||plan.drainCandidates.length)
+      .sort((a,b)=>{
+        const aCounts=[a.flowCandidates.length,a.drainCandidates.length].filter(Boolean);
+        const bCounts=[b.flowCandidates.length,b.drainCandidates.length].filter(Boolean);
+        return Math.min(...aCounts)-Math.min(...bCounts)||a.route.name.localeCompare(b.route.name);
       });
+    directionPlans.forEach(({route,flowCandidates,drainCandidates})=>{
+      let flowCandidate=null,drainCandidate=null;
+      if(flowDirectionVisible&&drainDirectionVisible){
+        const pair=pickDirectionArrowPair(flowCandidates,drainCandidates,occupied);
+        if(pair){flowCandidate=pair.flow;drainCandidate=pair.drain;}
+      }
+      if(flowDirectionVisible&&!flowCandidate){
+        flowCandidate=pickDirectionArrowCandidate(flowCandidates,occupied);
+      }
+      if(drainDirectionVisible&&!drainCandidate){
+        const reserved=flowCandidate?[...occupied,flowCandidate.box]:occupied;
+        drainCandidate=pickDirectionArrowCandidate(drainCandidates,reserved);
+      }
+      if(flowCandidate){
+        appendFlowArrow(route,flowCandidate);
+        occupied.push({...flowCandidate.box,id:`flow:${route.name}`});
+        nextState.flowArrows.push({
+          route:route.name,x:flowCandidate.x,y:flowCandidate.y,angle:flowCandidate.angle,
+          chainage:flowCandidate.chainage,direction:'no0-to-end',stationOrder:'ascending-chainage',
+          screenSpace:'fixed-size',placement:'visible-segment-clipping',collisionAvoidance:true,
+          leader:'none',width:FLOW_ARROW_WIDTH,height:FLOW_ARROW_HEIGHT,offsetPx:flowCandidate.offset,
+          anchor:{...flowCandidate.anchor},box:{...flowCandidate.box}
+        });
+      }
+      if(drainCandidate){
+        appendDrainArrow(route,drainCandidate);
+        occupied.push({...drainCandidate.box,id:`drain:${route.name}`});
+        nextState.drainArrows.push({
+          route:route.name,x:drainCandidate.x,y:drainCandidate.y,angle:drainCandidate.angle,
+          chainage:drainCandidate.chainage,direction:'high-z-to-low-z',
+          stationOrder:drainCandidate.followsStationOrder?'ascending-chainage':'descending-chainage',
+          fromZ:drainCandidate.fromZ,toZ:drainCandidate.toZ,elevationDrop:drainCandidate.elevationDrop,
+          screenSpace:'fixed-size',placement:'visible-segment-clipping',collisionAvoidance:true,
+          leader:'none',width:FLOW_ARROW_WIDTH,height:FLOW_ARROW_HEIGHT,offsetPx:drainCandidate.offset,
+          anchor:{...drainCandidate.anchor},box:{...drainCandidate.box}
+        });
+      }
     });
   }
   annotationState=nextState;
@@ -2210,6 +2323,13 @@ window.__flowDirectionDebug={
   color:FLOW_ARROW_COLOR,width:FLOW_ARROW_WIDTH,height:FLOW_ARROW_HEIGHT,
   getState:()=>JSON.parse(JSON.stringify(annotationState.flowArrows))
 };
+window.__drainDirectionDebug={
+  visible:()=>drainDirectionVisible,
+  routeCount:routeDefs.length,direction:'high-z-to-low-z',elevationBasis:'pipe-center-z',
+  screenSpace:'fixed-size',placement:'visible-segment-clipping',collisionAvoidance:true,
+  color:DRAIN_ARROW_COLOR,outline:DRAIN_ARROW_OUTLINE,width:FLOW_ARROW_WIDTH,height:FLOW_ARROW_HEIGHT,
+  getState:()=>JSON.parse(JSON.stringify(annotationState.drainArrows))
+};
 
 buildRoute(1);buildCorridor(1);buildRouteLabels(1);
 window.toggleRoute=function(value){routeGroup.visible=Boolean(value)};
@@ -2217,7 +2337,28 @@ window.toggleCorridor=function(value){corridorGroup.visible=Boolean(value)};
 window.toggleRouteLbl=function(value){routeLblGroup.visible=Boolean(value)};
 window.toggleRouteName=function(value){routeNameVisible=Boolean(value);annotationDirty=true;window.updateRouteAnnotations(true)};
 window.toggleValves=function(value){valveVisible=Boolean(value);annotationDirty=true;window.updateRouteAnnotations(true)};
-window.toggleFlowDirection=function(value){flowDirectionVisible=Boolean(value);annotationDirty=true;window.updateRouteAnnotations(true)};
+function syncDirectionLegend(){
+  [
+    ['legendFlowOn',flowDirectionVisible],['legendFlowOff',!flowDirectionVisible],
+    ['legendDrainOn',drainDirectionVisible],['legendDrainOff',!drainDirectionVisible]
+  ].forEach(([id,active])=>{
+    const button=document.getElementById(id);if(!button)return;
+    button.classList.toggle('act',active);button.classList.toggle('bd',!active);
+    button.setAttribute('aria-pressed',String(active));applyBtnTheme(button,active);
+  });
+}
+window.syncDirectionLegend=syncDirectionLegend;
+window.toggleFlowDirection=function(value){flowDirectionVisible=Boolean(value);syncDirectionLegend();annotationDirty=true;window.updateRouteAnnotations(true)};
+window.toggleDrainDirection=function(value){drainDirectionVisible=Boolean(value);syncDirectionLegend();annotationDirty=true;window.updateRouteAnnotations(true)};
+window.setFlowDirectionVisible=function(value){
+  const checkbox=document.getElementById('showFlowDirection');if(checkbox)checkbox.checked=Boolean(value);
+  window.toggleFlowDirection(value);
+};
+window.setDrainDirectionVisible=function(value){
+  const checkbox=document.getElementById('showDrainDirection');if(checkbox)checkbox.checked=Boolean(value);
+  window.toggleDrainDirection(value);
+};
+syncDirectionLegend();
 window.updateRouteZ=function(zS){buildRoute(zS);buildCorridor(zS);buildRouteLabels(zS);annotationDirty=true};
 window.__routeDebug.getSolidMaterials=()=>corridorGroup.children.map(mesh=>({
   routeName:mesh.userData.routeName,
@@ -2481,9 +2622,10 @@ function loadDef(){try{const d=JSON.parse(localStorage.getItem(SK));if(!d)return
   if(d.showRouteName!=null){const rn=document.getElementById('showRouteName');if(rn){rn.checked=d.showRouteName;toggleRouteName(d.showRouteName)}}
   if(d.showValves!=null){const ve=document.getElementById('showValves');if(ve){ve.checked=d.showValves;toggleValves(d.showValves)}}
   if(d.showFlowDirection!=null){const fd=document.getElementById('showFlowDirection');if(fd){fd.checked=d.showFlowDirection;toggleFlowDirection(d.showFlowDirection)}}
+  if(d.showDrainDirection!=null){const dd=document.getElementById('showDrainDirection');if(dd){dd.checked=d.showDrainDirection;toggleDrainDirection(d.showDrainDirection)}}
   if(d.showRouteLbl!=null){const rl=document.getElementById('showRouteLbl');if(rl){rl.checked=d.showRouteLbl;toggleRouteLbl(d.showRouteLbl)}}
   if(d.bg)setBg(d.bg);
-  ['showTerrain','showOvl','wf','fs','showGcp','showChiku','showChikuLbl','showRoute','showCorridor','showRouteName','showValves','showFlowDirection','showRouteLbl','showGsi','showHill','gsiCutout'].forEach(k=>{
+  ['showTerrain','showOvl','wf','fs','showGcp','showChiku','showChikuLbl','showRoute','showCorridor','showRouteName','showValves','showFlowDirection','showDrainDirection','showRouteLbl','showGsi','showHill','gsiCutout'].forEach(k=>{
     const el=document.getElementById(k);if(el&&d[k]!=null){el.checked=d[k];if(el.onchange)el.onchange({target:el});else{const ev=new Event('change');el.dispatchEvent(ev)}}
   });
   if(d.gsiType!=null){const gt=document.getElementById('gsiType');if(gt){gt.value=d.gsiType;if(window.switchGsiType)switchGsiType(d.gsiType)}}
@@ -2506,9 +2648,10 @@ window.saveDef=function(){try{const d={};
   {const rn=document.getElementById('showRouteName');if(rn)d.showRouteName=rn.checked;}
   {const ve=document.getElementById('showValves');if(ve)d.showValves=ve.checked;}
   {const fd=document.getElementById('showFlowDirection');if(fd)d.showFlowDirection=fd.checked;}
+  {const dd=document.getElementById('showDrainDirection');if(dd)d.showDrainDirection=dd.checked;}
   {const rl=document.getElementById('showRouteLbl');if(rl)d.showRouteLbl=rl.checked;}
   d.bg=curBg;
-  ['showTerrain','showOvl','wf','fs','showGcp','showChiku','showChikuLbl','showRoute','showCorridor','showRouteName','showValves','showFlowDirection','showRouteLbl','showGsi','showHill','gsiCutout'].forEach(k=>{
+  ['showTerrain','showOvl','wf','fs','showGcp','showChiku','showChikuLbl','showRoute','showCorridor','showRouteName','showValves','showFlowDirection','showDrainDirection','showRouteLbl','showGsi','showHill','gsiCutout'].forEach(k=>{
     const el=document.getElementById(k);if(el)d[k]=el.checked;
   });
   const gt=document.getElementById('gsiType');if(gt)d.gsiType=gt.value;
@@ -2526,6 +2669,7 @@ function syncLayerVisibilityFromControls(){
     ['showRoute',window.toggleRoute],['showCorridor',window.toggleCorridor],
     ['showRouteName',window.toggleRouteName],['showValves',window.toggleValves],
     ['showFlowDirection',window.toggleFlowDirection],
+    ['showDrainDirection',window.toggleDrainDirection],
     ['showRouteLbl',window.toggleRouteLbl]
   ].forEach(([id,toggle])=>{
     const element=document.getElementById(id);if(element&&typeof toggle==='function')toggle(element.checked);
